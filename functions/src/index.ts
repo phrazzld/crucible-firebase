@@ -1,27 +1,44 @@
+import 'dotenv/config';
 import * as admin from 'firebase-admin';
 import * as logger from "firebase-functions/logger";
-import { onCall, onRequest } from 'firebase-functions/v2/https';
+import { onCall } from 'firebase-functions/v2/https';
 import serviceAccount from '../service-account-key.json';
+import { openai } from './openai';
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
 })
 
-const helloWorld = onRequest((request, response) => {
-  logger.info("Hello logs!", { structuredData: true });
-  logger.info("request:", request)
+const runConfigTrial = onCall(async (request) => {
+  const { config } = request.data;
+  const { model, maxTokens, temperature, frequencyPenalty, presencePenalty, systemPrompt, userPrompt } = config;
+  logger.info("config:", config)
 
-  response.send("Hello from Firebase!");
-});
+  const openaiResponse = await openai.chat.completions.create({
+    user: request.auth?.uid,
+    model,
+    max_tokens: maxTokens,
+    temperature,
+    frequency_penalty: frequencyPenalty,
+    presence_penalty: presencePenalty,
+    messages: [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      {
+        role: "user",
+        content: userPrompt,
+      },
+    ]
+  })
 
-const callMeMaybe = onCall(async (request) => {
-  logger.info("callMeMaybe:", request)
+  const response = openaiResponse.choices[0].message?.content?.trim() || ""
+  logger.info("response:", response)
 
   return {
-    data: "Hello from Firebase!",
-    ps: "I just met you",
+    response
   }
 })
 
-exports.callMeMaybe = callMeMaybe;
-exports.helloWorld = helloWorld;
+exports.runConfigTrial = runConfigTrial;
